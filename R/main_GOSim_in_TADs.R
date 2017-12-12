@@ -1,4 +1,6 @@
 #loading required libraries
+library(tidyverse)
+
 library(GenomicRanges)
 library(biomaRt)
 library(rtracklayer)
@@ -13,7 +15,6 @@ library(mclust)
 library(devtools)
 library(gplots)
 
-library(tidyverse)
 library(readxl)
 library(magrittr)
 
@@ -23,8 +24,8 @@ source("R/jaccard_matrix_GRList.R")
 source("R/plot_tad_nr_chrsize.R")
 source("R/fun_mart_to_granges.R")
 source("R/fun_introduce_boundaries.R")
-source("R/fun_getAllRdmBoundaries.R")
 source("R/fun_is_separated.R")
+source("R/fun_sample_rdm_bdies.R")
 
 #contains information about the human chromosome size etc...
 hum_seqinfo <- seqinfo(BSgenome.Hsapiens.UCSC.hg38)
@@ -39,17 +40,18 @@ hum_seqinfo <- seqinfo(BSgenome.Hsapiens.UCSC.hg38)
   hESC_BDY <- introduce_boundaries(hESC_TADs_File, 40000, hum_seqinfo)
 
   #builds grangeslist of Schmitt boundaries
-  TAD_file_Schmitt2016 <- file.path("Datasets", "mmc4.xlsx")
+  TAD_file_Schmitt2016 <- file.path("data", "mmc4.xlsx")
   schmitt_BDY <- xltoBDY(TAD_file_Schmitt2016, hum_seqinfo)
   all_BDY <- c(schmitt_BDY, hESC_BDY)
 
   #creates a GRangesList with randomly introduced boundaries for every celltype in the List
-  all_rdm_BDY <- getAllRdmBoundaries(all_BDY, 40000, hum_seqinfo)
+  all_rdm_BDY <- lapply(all_BDY, sample_rdm_bdies, 40000, hum_seqinfo)
   
-  write_rds(all_BDY, "Datasets/data_grangeslist_all_BDY.rds")
-  write_rds(all_rdm_BDY, "Datasets/data_grangeslist_all_rdm_BDY.rds")
-  all_BDY <- read_rds("Datasets/data_grangeslist_all_BDY.rds")
-  all_rdm_BDY <- read_rds("Datasets/data_grangeslist_all_rdm_BDY.rds")
+  #write_rds(all_BDY, "results/tidydata/all_real_bdies.rds")
+  #write_rds(all_rdm_BDY, "results/tidydata/all_rdm_bdies.rds")
+  
+  all_BDY <- read_rds("results/tidydata/all_real_bdies.rds")
+  all_rdm_BDY <- read_rds("results/tidydata/all_rdm_bdies.rds")
 
   
   
