@@ -18,13 +18,13 @@ library(readxl)
 library(magrittr)
 
 #sourcing required functions
-source("R Scripts/fun_Excel_to_Boundary.R")
-source("R Scripts/jaccard_matrix_GRList.R")
-source("R Scripts/plot_tad_nr_chrsize.R")
-source("R Scripts/fun_mart_to_granges.R")
-source("R Scripts/fun_introduce_boundaries.R")
-source("R Scripts/fun_getAllRdmBoundaries.R")
-source("R Scripts/fun_is_separated.R")
+source("R/fun_Excel_to_Boundary.R")
+source("R/jaccard_matrix_GRList.R")
+source("R/plot_tad_nr_chrsize.R")
+source("R/fun_mart_to_granges.R")
+source("R/fun_introduce_boundaries.R")
+source("R/fun_getAllRdmBoundaries.R")
+source("R/fun_is_separated.R")
 
 #contains information about the human chromosome size etc...
 hum_seqinfo <- seqinfo(BSgenome.Hsapiens.UCSC.hg38)
@@ -35,7 +35,7 @@ hum_seqinfo <- seqinfo(BSgenome.Hsapiens.UCSC.hg38)
 #available celltypes
 
   #introduces boundaries of 40000bp into dixon dataset
-  hESC_TADs_File <- file.path("Datasets", "hESC.hg18.bed.hg38.bed")
+  hESC_TADs_File <- file.path("data", "hESC.hg18.bed.hg38.bed")
   hESC_BDY <- introduce_boundaries(hESC_TADs_File, 40000, hum_seqinfo)
 
   #builds grangeslist of Schmitt boundaries
