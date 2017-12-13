@@ -1,12 +1,37 @@
 library(tidyverse)
 
 #loads tidy Dataframe with GO similarity scires of Molecular function
-tidydf <- read_rds("Datasets/data_great_tibbl.rds")
-
+tidydf <- read_rds("results/tidydata/data_great_tibbl.rds")
 
 ggplot(data = tidydf, aes(x = dist, y = go_sim)) + 
   geom_smooth(aes(color = separated, linetype = real)) +
-  scale_x_continuous(breaks = c("0", "500000", "1000000")) +
+  facet_wrap(~celltype, nrow = 3)
+
+
+all_gosims <- read_rds("results/tidydata/data_mytibble.rds")
+
+#plot of BP gosims
+BP_gosims <- all_gosims %>% 
+  filter(go_sim_BP != "NA")
+
+ggplot(data = BP_gosims, aes(x = dist, y = go_sim_BP)) + 
+  geom_smooth(aes(color = separated, linetype = real)) +
+  facet_wrap(~celltype, nrow = 3)
+  
+#plot MF gosims
+MF_gosims <- all_gosims %>% 
+  filter(go_sim_MF != "NA")
+
+ggplot(data = MF_gosims, aes(x = dist, y = go_sim_MF)) + 
+  geom_smooth(aes(color = separated, linetype = real)) +
+  facet_wrap(~celltype, nrow = 3)
+
+#plot cc gosims
+CC_gosims <- all_gosims %>% 
+  filter(go_sim_CC != "NA")
+
+ggplot(data = CC_gosims, aes(x = dist, y = go_sim_CC)) + 
+  geom_smooth(aes(color = separated, linetype = real)) +
   facet_wrap(~celltype, nrow = 3)
 
 
