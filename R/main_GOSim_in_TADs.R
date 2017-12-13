@@ -1,6 +1,4 @@
 #loading required libraries
-library(tidyverse)
-
 library(GenomicRanges)
 library(biomaRt)
 library(rtracklayer)
@@ -15,6 +13,7 @@ library(mclust)
 library(devtools)
 library(gplots)
 
+library(tidyverse)
 library(readxl)
 library(magrittr)
 
@@ -26,10 +25,10 @@ source("R/fun_mart_to_granges.R")
 source("R/fun_introduce_boundaries.R")
 source("R/fun_is_separated.R")
 source("R/fun_sample_rdm_bdies.R")
+source("R/fun_get_go_sim.R")
 
 #contains information about the human chromosome size etc...
 hum_seqinfo <- seqinfo(BSgenome.Hsapiens.UCSC.hg38)
-
 
 
 #construction of a random boundary list and a real boudary list containing boundaries in all
@@ -42,6 +41,8 @@ hum_seqinfo <- seqinfo(BSgenome.Hsapiens.UCSC.hg38)
   #builds grangeslist of Schmitt boundaries
   TAD_file_Schmitt2016 <- file.path("data", "mmc4.xlsx")
   schmitt_BDY <- xltoBDY(TAD_file_Schmitt2016, hum_seqinfo)
+  
+  #merges grangeslists of schmitt and dixon datasets
   all_BDY <- c(schmitt_BDY, hESC_BDY)
 
   #creates a GRangesList with randomly introduced boundaries for every celltype in the List
@@ -54,22 +55,19 @@ hum_seqinfo <- seqinfo(BSgenome.Hsapiens.UCSC.hg38)
   all_rdm_BDY <- read_rds("results/tidydata/all_rdm_bdies.rds")
 
   
-  
 #downloads all human genes from ENSEMBL and filters them for protein coding genes. 
 #Keeps only the longest transcript of every GeneID and builds a GRangesobject out of
 #all remaining genes
   
-' ch38_query <- useMart(biomart ="ENSEMBL_MART_ENSEMBL",
+  ch38_query <- useMart(biomart ="ENSEMBL_MART_ENSEMBL",
                   dataset = "hsapiens_gene_ensembl")
   ch38_atb <- c("ensembl_gene_id", "chromosome_name", "transcript_end", "transcript_start", 
               "transcription_start_site", "gene_biotype", "goslim_goa_accession")
   ch38 <- getBM(attributes = ch38_atb, mart = ch38_query)
-  gr_ch38 <- mart_to_granges(ch38, hum_seqinfo)'
+  gr_ch38 <- mart_to_granges(ch38, hum_seqinfo)
   
   #write_rds(gr_ch38, "Datasets/data_granges_AllFilteredGenes.rds")
-  gr_ch38 <- read_rds("Datasets/data_granges_AllFilteredGenes")
-  
-
+  gr_ch38 <- read_rds("results/tidydata/data_granges_AllFilteredGenes")
   
   
 #retrieves all possible cis pairs of the genes stored in a genomic ranges object and
@@ -82,42 +80,23 @@ hum_seqinfo <- seqinfo(BSgenome.Hsapiens.UCSC.hg38)
     mutate("g2_id" = gr_ch38$gene_id[cisp$g2])
 
 
+#construction of a data classes to compare semantic similarities among GO Terms
+#via ensembl geneIDs and comparison of GO annotations for all annotated genepairs
 
-#construction of a data class to compare semantic similarities among GO Terms via ensembl 
-#geneIDs and comparison of GO annotations for all annotated genepairs
-
-  hsGO <- godata('org.Hs.eg.db', keytype = "ENSEMBL", ont="BP")
-
-  #calculates the Graph-based similarity of GO Terms from all Gene Pairs
-  l <- length(cisp$g1)
-  go_sim <- vector(mode = "character", length = l)
-  i <- i + 1
-  
-  while (i <= l){
-    g <- geneSim(cisp$g1_id[i],
-               cisp$g2_id[i],
-               semData = hsGO,
-               measure = "Resnik",
-               combine = "max")
-    if(typeof(g) == "logical"){
-      go_sim[i] <-"NA"
-      i <- i + 1
-    } else{
-      go_sim[i] <- g$geneSim
-      i <- i + 1
-    }
-  }
-
- 
-  #write_rds(go_sim, "Datasets/gosimlist_bP.rds")
-  go_sim <- read_rds("Datasets/gosimlist_bP.rds")
+  hsGO_BP <- godata('org.Hs.eg.db', keytype = "ENSEMBL", ont = "BP")
+  hsGO_MF <- godata('org.Hs.eg.db', keytype = "ENSEMBL", ont = "MF")
+  hsGO_CC <- godata('org.Hs.eg.db', keytype = "ENSEMBL", ont = "CC")
   
   cisp <- cisp %>% 
-    mutate("go_sim" = go_sim)
-
+    mutate(go_sim_BP = get_go_sim(cisp, hsGO_BP)) %>% 
+    mutate(go_sim_MF = get_go_sim(cisp, hsGO_MF)) %>% 
+    mutate(go_sim_CC = get_go_sim(cisp, hsGO_CC))
   
-
-# checks wether two genes are separated by a boundary or not
+  #write_rds(cisp, "results/tidydata/cisp_with_allgosim.rds")
+  cisp <- read_rds("results/tidydata/cisp_with_allgosim.rds")
+  
+  
+#checks wether two genes are separated by a boundary or not
   gene_sep_allbdy <- is_separated(cisp, gr_ch38, all_BDY, hum_seqinfo)
   gene_sep_allbdy <- gene_sep_allbdy %>% 
     mutate(real = TRUE)
