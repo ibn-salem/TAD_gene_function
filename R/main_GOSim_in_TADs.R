@@ -47,6 +47,7 @@ hum_seqinfo <- seqinfo(BSgenome.Hsapiens.UCSC.hg38)
 
   #creates a GRangesList with randomly introduced boundaries for every celltype in the List
   all_rdm_BDY <- lapply(all_BDY, sample_rdm_bdies, 40000, hum_seqinfo)
+  all_rdm_BDY <- GRangesList(all_rdm_BDY)
   
   #write_rds(all_BDY, "results/tidydata/all_real_bdies.rds")
   #write_rds(all_rdm_BDY, "results/tidydata/all_rdm_bdies.rds")
@@ -83,10 +84,14 @@ hum_seqinfo <- seqinfo(BSgenome.Hsapiens.UCSC.hg38)
 #construction of a data classes to compare semantic similarities among GO Terms
 #via ensembl geneIDs and comparison of GO annotations for all annotated genepairs
 
+  #constructs the data classes of all three GO annotations
   hsGO_BP <- godata('org.Hs.eg.db', keytype = "ENSEMBL", ont = "BP")
   hsGO_MF <- godata('org.Hs.eg.db', keytype = "ENSEMBL", ont = "MF")
   hsGO_CC <- godata('org.Hs.eg.db', keytype = "ENSEMBL", ont = "CC")
   
+  #adds the gosimilarity annotations to the cispair tibble
+  #WARNING: Takes forever(~ 12h) could not find a way to speed it up so far. 
+  #In addition, the readout type is not uniform (list of lists with different lengths)
   cisp <- cisp %>% 
     mutate(go_sim_BP = get_go_sim(cisp, hsGO_BP)) %>% 
     mutate(go_sim_MF = get_go_sim(cisp, hsGO_MF)) %>% 
@@ -96,7 +101,8 @@ hum_seqinfo <- seqinfo(BSgenome.Hsapiens.UCSC.hg38)
   cisp <- read_rds("results/tidydata/cisp_with_allgosim.rds")
   
   
-#checks wether two genes are separated by a boundary or not
+#checks for all celltypes, genepairs and random or real bdies wether two genes 
+#are separated by a boundary or not and stores all in one tibble
   gene_sep_allbdy <- is_separated(cisp, gr_ch38, all_BDY, hum_seqinfo)
   gene_sep_allbdy <- gene_sep_allbdy %>% 
     mutate(real = TRUE)
@@ -105,50 +111,10 @@ hum_seqinfo <- seqinfo(BSgenome.Hsapiens.UCSC.hg38)
   gene_sep_allrdmbdy <- gene_sep_allrdmbdy %>% 
     mutate(real = FALSE)
   
-  
-  write_rds(gene_sep_allbdy, "Datasets/data_gene_sep_allbdy_BP.rds")
-  write_rds(gene_sep_allrdmbdy, "Datasets/data_gene_sep_allrdmbdy_BP.rds")
-  
-  gene_sep_allbdy <- read_rds("Datasets/data_gene_sep_allbdy_BP.rds")
-  gene_sep_allrdmbdy <- read_rds("Datasets/data_gene_sep_allrdmbdy_BP.rds")
-  
-  a <- rbind(gene_sep_allbdy, gene_sep_allrdmbdy)
-  
-  #filters out NA values in go_sim
-  a <- a %>% 
-    filter(go_sim != "NA") %>% 
-    mutate(go_sim = as.numeric(go_sim)) 
-  
-  tadgroup <- vector(mode = "character", length = nrow(a))
-  for(i in 1:nrow(a)){
-    
-    if (a$real[i] == TRUE) {
-      
-      if(a$separated[i] == TRUE){
-        tadgroup[i] <-  "sep by BDY"
-      }else{
-        tadgroup[i] <-  "not sep by BDY"
-      }
-      
-    }else{
-      
-      if(a$separated[i] == TRUE) {
-        tadgroup[i] <-  "sep by rdm BDY"
-      }else{
-        tadgroup[i] <- "not sep by rdm BDY"
-      }
-    }
-  }
+  mytibble <- rbind(gene_sep_allbdy, gene_sep_allrdmbdy)
 
-  
-  group <- tadgroup
-  a <- a %>% 
-    mutate(tadgroup = group)
-    
-  
-  write_rds(a, "Datasets/data_great_tibbl.rds")
-  a <- read_rds("1_Uni/M.Sc. Biomedizin/Projektarbeit_TAD/Datasets/data_great_tibbl.rds")
-    
+  write_rds(mytibble, "results/tidydata/data_mytibble.rds")
+  read_rds("results/tidydata/data_mytibble.rds")
   
 
 # creates a dataframe with TAD ids per cell type and the number of genes that they carry 
