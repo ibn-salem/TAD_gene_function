@@ -26,6 +26,7 @@ source("R/fun_introduce_boundaries.R")
 source("R/fun_is_separated.R")
 source("R/fun_sample_rdm_bdies.R")
 source("R/fun_get_go_sim.R")
+source("R/fun_tidy_gosimList.R")
 
 #contains information about the human chromosome size etc...
 hum_seqinfo <- seqinfo(BSgenome.Hsapiens.UCSC.hg38)
@@ -100,6 +101,12 @@ hum_seqinfo <- seqinfo(BSgenome.Hsapiens.UCSC.hg38)
   #write_rds(cisp, "results/tidydata/cisp_with_allgosim.rds")
   cisp <- read_rds("results/tidydata/cisp_with_allgosim.rds")
   
+  #extracts only the geneSim value of each list of lists
+  cisp <- cisp %>% 
+    mutate(go_sim_BP = tidy_gosimList(go_sim_BP)) %>% 
+    mutate(go_sim_MF = tidy_gosimList(go_sim_MF)) %>% 
+    mutate(go_sim_CC = tidy_gosimList(go_sim_CC))
+  
   
 #checks for all celltypes, genepairs and random or real bdies wether two genes 
 #are separated by a boundary or not and stores all in one tibble
@@ -113,8 +120,8 @@ hum_seqinfo <- seqinfo(BSgenome.Hsapiens.UCSC.hg38)
   
   mytibble <- rbind(gene_sep_allbdy, gene_sep_allrdmbdy)
 
-  write_rds(mytibble, "results/tidydata/data_mytibble.rds")
-  read_rds("results/tidydata/data_mytibble.rds")
+  #write_rds(mytibble, "results/tidydata/data_mytibble.rds")
+  mytibble <- read_rds("results/tidydata/data_mytibble.rds")
   
 
 # creates a dataframe with TAD ids per cell type and the number of genes that they carry 
