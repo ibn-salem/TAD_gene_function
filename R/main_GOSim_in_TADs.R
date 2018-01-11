@@ -19,6 +19,7 @@ library(magrittr)
 
 #sourcing required functions
 source("R/fun_Excel_to_Boundary.R")
+source("R/fun_Excel_to_TAD.R")
 source("R/jaccard_matrix_GRList.R")
 source("R/plot_tad_nr_chrsize.R")
 source("R/fun_mart_to_granges.R")
@@ -52,7 +53,6 @@ hum_seqinfo <- seqinfo(BSgenome.Hsapiens.UCSC.hg38)
   
   #write_rds(all_BDY, "results/tidydata/all_real_bdies.rds")
   #write_rds(all_rdm_BDY, "results/tidydata/all_rdm_bdies.rds")
-  
   all_BDY <- read_rds("results/tidydata/all_real_bdies.rds")
   all_rdm_BDY <- read_rds("results/tidydata/all_rdm_bdies.rds")
 
@@ -61,16 +61,18 @@ hum_seqinfo <- seqinfo(BSgenome.Hsapiens.UCSC.hg38)
 #Keeps only the longest transcript of every GeneID and builds a GRangesobject out of
 #all remaining genes
   
+  #TODO use the "entrezgene" to fetch the KEGG pathways annotated for those genes
+  
   ch38_query <- useMart(biomart ="ENSEMBL_MART_ENSEMBL",
                   dataset = "hsapiens_gene_ensembl")
   ch38_atb <- c("ensembl_gene_id", "chromosome_name", "transcript_end", "transcript_start", 
-              "transcription_start_site", "gene_biotype", "goslim_goa_accession")
+              "transcription_start_site", "gene_biotype", "goslim_goa_accession", "entrezgene")
   ch38 <- getBM(attributes = ch38_atb, mart = ch38_query)
   gr_ch38 <- mart_to_granges(ch38, hum_seqinfo)
   
   #write_rds(gr_ch38, "Datasets/data_granges_AllFilteredGenes.rds")
   gr_ch38 <- read_rds("results/tidydata/data_granges_AllFilteredGenes")
-  
+
   
 #retrieves all possible cis pairs of the genes stored in a genomic ranges object and
 #adds two colums containing their gene ids
@@ -78,10 +80,10 @@ hum_seqinfo <- seqinfo(BSgenome.Hsapiens.UCSC.hg38)
   cisp <- getAllCisPairs(gr_ch38)
   cisp <- cisp %>% 
     as_tibble() %>% 
-    mutate("g1_id" = gr_ch38$gene_id[cisp$g1]) %>% 
-    mutate("g2_id" = gr_ch38$gene_id[cisp$g2])
+    mutate("g1_id" = gr_ch38$gene_id[cisp$g1]) %>%
+    mutate("g2_id" = gr_ch38$gene_id[cisp$g2]) %>%
 
-
+  
 #construction of a data classes to compare semantic similarities among GO Terms
 #via ensembl geneIDs and comparison of GO annotations for all annotated genepairs
 
@@ -124,50 +126,64 @@ hum_seqinfo <- seqinfo(BSgenome.Hsapiens.UCSC.hg38)
   mytibble <- read_rds("results/tidydata/data_mytibble.rds")
   
 
-# creates a dataframe with TAD ids per cell type and the number of genes that they carry 
-TAD_id <- c()
-n_genes <- c()
-celltype <- c()
-i <- 1
+  
+  
+  
+#creating GRangesList object of TADs from Dixon and Schmitt Datasets, count the Genes
+#each TAD carries, the NR of TAD per Celltype
+  
+  #import schmitt tads from Excel-file
+  schmitt_TAD <- xltoTAD(TAD_file_Schmitt2016, 10000000)
+  
+  #import dixon Tads from Bed-file
+  dixon_TAD <- import(hESC_TADs_File)
+  
+  #build a GRangeslist out of schmitt and dixon GRanges
+  dixon_TAD <- GRangesList(dixon_TAD)
+  names(dixon_TAD) <- "hESC"
+  all_TAD <- c(schmitt_TAD, dixon_TAD) 
+      
+  #counts genes that map into TADs for all celltypes
+  TAD_id <- c()
+  n_genes <- c()
+  celltype <- c()
+  i <- 1
+  
+  while (i <= length(all_TAD)){
+    TAD_id <- c(TAD_id, 1:NROW(all_TAD[[i]]))
+    celltype<- c(celltype, rep(names(all_TAD[i]), NROW(all_TAD[[i]])))
+    ovl <- findOverlaps(all_TAD[[i]], gr_ch38)
+    n_genes <- c(n_genes, countLnodeHits(ovl))
+    i<-i+1
+  }
+  
+  #build a tibble with celltype, the tad ids and the nr of genes per tad id
+  gpert <- tibble(celltype, TAD_id, n_genes)
 
-while (i <= length(all_TAD)){
-  TAD_id <- c(TAD_id, 1:NROW(all_TAD[[i]]))
-  celltype<- c(celltype, rep(names(all_TAD[i]), NROW(all_TAD[[i]])))
-  ovl <- findOverlaps(all_TAD[[i]], gr_ch38)
-  n_genes <- c(n_genes, countLnodeHits(ovl))
-  i<-i+1
-}
+  #stores NR of TAD per Celltypes and their sizes in the built tibble
+  tad_per_ctype <- as_tibble(all_TAD) %>%  
+    group_by(group_name) %>% 
+    summarise(n = n())
+  
+  names(tad_per_ctype) <- c("celltype", "TAD_nr")
+  all_TAD <- as_tibble(all_TAD)
+  
+  gpert <- gpert %>% 
+    mutate(width = all_TAD$width) %>% 
+    left_join(tad_per_ctype)
+  
+  names(gpert)[4] <- "TAD_size"
+  
+  write_rds(gpert, "results/tidydata/data_all_tad_annotations.rds")
 
-gpert <- tibble(TAD_id, n_genes, celltype)
-write_rds(gpert, "Datasets/genes_per_TAD")
 
 
-#plots the TAD sizes per celltype as boxplot
-plot_tadsizes <- as.data.frame(width(all_TAD))
-ggplot(plot_tadsizes, aes(x = group_name, y = value, fill = group_name)) + 
-  labs(title="Distribution of TAD sizes",
-       x="Cell- / Tissuetype",
-       y="TAD size") +
-  geom_boxplot() + 
-  scale_y_log10()
-
-#stores the number of TADs per celltype in a list and plots it as bargraph
-nr_of_tad <- c()
-i <- 1
-while (i <= length(all_TAD)){
-  nr_of_tad <- c(nr_of_tad, NROW(all_TAD[[i]]))
-  i <- i + 1
-}
-celltypes <- names(all_TAD)
-plot_nroftad <- as.data.frame(nr_of_tad)
-plot_nroftad <- cbind(plot_nroftad, celltypes)
-ggplot(plot_nroftad, aes(x = celltypes, y = nr_of_tad, fill = nr_of_tad)) + geom_col() 
 
 
 #creating a heatmap of the jaccard coefficients of each entry pair 
 #for the coordinates of a GRList object
 jmat <- jaccard_matrix(schmitt_BDY)
-my_palette <- colorRampPalette(c("grey", "red", "blue"))(n = 299)
+my_palette <- colorRampPalette(c("grey", "red", "blue"))(n = 100)
 heatmap.2(jmat, tracecol = NA, symm = TRUE, col = my_palette)
 
 #converts the jaccard_matrix into a distance matrix and does pcomp
@@ -178,5 +194,5 @@ jmat <- as.data.frame(jmat)
 for(i in 1:length(names(jmat))){
   x <- pcomp$points[i,1]
   y <- pcomp$points[i,2]
-  text(x,y, labels = names(jmat)[i], pos = 2)
+  text(x,y, labels = names(jmat)[i], pos = 1)
 }
