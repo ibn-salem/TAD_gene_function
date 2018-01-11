@@ -8,7 +8,7 @@ sample_rdm_bdies <- function(real_bdies_gr, bdysize, hum_seqinfo){
     summarise(n = n()) %>%
     mutate(seqnames = as.character(seqnames),
            #shrink chromsize by one bdy length, to restrict sampling out of bounds 
-           chrom_len = seqlengths(hum_seqinfo[seqnames])- bdysize)
+           chrom_len = seqlengths(hum_seqinfo[seqnames]) - bdysize)
   
   #sample the coordinates of random boundaries
   starts <- map2(bdy_per_chr$chrom_len, bdy_per_chr$n, sample.int)
@@ -16,8 +16,10 @@ sample_rdm_bdies <- function(real_bdies_gr, bdysize, hum_seqinfo){
   #provides chromosome names for random boundaries
   seqnames <- rep(bdy_per_chr$seqnames, bdy_per_chr$n)
   
+  #builds a GRangesobject containing the sampled random boundaries
   rdm_bdies_gr <- GRanges(seqnames,
                      IRanges(unlist(starts), width = bdysize),
                      seqinfo = hum_seqinfo)
+  
   return(rdm_bdies_gr)
 }
