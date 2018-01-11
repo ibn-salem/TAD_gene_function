@@ -15,9 +15,10 @@ is_separated <- function(cispairs, genes_granges, grangeslist, seqinfo){
   #test for all entries in the GRangesList wether or not there are any overlaps between
   #the cispair ranges and the ranges in Granges object and stores the logical output in
   #an additional column
+  
   for (i in 1:length(grangeslist)){
     cispairs <- cispairs %>% 
-      cbind(overlapsAny(cisp_granges, grangeslist[i]))
+       cbind(overlapsAny(cisp_granges, grangeslist[i]))
   }
   
   #renames the colums of the tibble created above
