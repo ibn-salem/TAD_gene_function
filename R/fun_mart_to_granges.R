@@ -15,8 +15,9 @@ mart_to_granges <- function(mar, seqinfo){
                              end = mar$transcription_start_site),
                      seqinfo = seqinfo,
                      "gene_id" = mar$ensembl_gene_id,
-                     "go_term" = mar$goslim_goa_accession
-  )
+                     "go_term" = mar$goslim_goa_accession,
+                     "NCBI_ID" = paste0("hsa:", mar$entrezgene)
+                      )
     
   return(granges)
 }
