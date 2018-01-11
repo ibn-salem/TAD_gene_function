@@ -14,10 +14,11 @@ jaccard_matrix <- function(grlist){
       overlaps <- findOverlaps(grlist[[x]], grlist[[y]])
       
       #calculate the jaccard coefficient to quantify similarity of boundaries
-      a <- length(grlist[[x]])
-      b <- length(grlist[[y]])
+
       c <- length(overlaps)
-      jaccard <- c/ sum(a,b)
+      a_uniq <- sum(!overlapsAny(grlist[[x]], grlist[[y]]))
+      b_uniq <- sum(!overlapsAny(grlist[[y]], grlist[[x]]))
+      jaccard <- c/ (c + a_uniq + b_uniq )
       jackoef <- c(jackoef, jaccard)
     }
   }
