@@ -1,57 +1,76 @@
-#creates tibble out of granges list with all boundaries and counts how often every
-#start coordinate occurs.
+find_genes_surround_unique_bdies <- function(grl_bdies, gr_HumProtGenes, meta_BDY, window_BDY, hum_seqinfo){
 
-#TODO not sure whether this is sufficient to only use the starting point of a boundary,
-#since it is 40001 bp wide
-bdies_tibble <- as_tibble(schmitt_BDY)
-all_bdies_gr <- unlist(schmitt_BDY)
-
-hit_tibble <- plyr::count(bdies_tibble, "start", wt_var = NULL)
-grs <- left_join(bdies_tibble, hit_tibble, by = "start")
-
-#counts the number of boundaries that are uniqe for a celltype and plots it in a barplot
-unique_bdies <- grs %>% 
-  filter(freq == 1) %>% 
-  group_by(group_name) %>% 
-  summarise(n = n())
-
-ggplot(unique_bdies, aes( x = group_name, y = n)) +
-  geom_bar(stat = "identity") +
-  theme_minimal() +
-  labs(x = "Celltype", y = "Nr of uniqe Boundaries")
-
-
-
-
-olList <- map(as.list(schmitt_BDY), ~overlapsAny(all_bdies_gr, .x))
-olDF <- as.tibble(olList)
-
-bdies_tibble <- bind_cols(bdies_tibble, olDF)
-
-bdies_tibble <- bdies_tibble %>% 
-  select(-c(width, strand, group, group_name))
-
-bdies_tibble <- bdies_tibble %>% 
-  mutate(bdy_nr = seq_along(1:nrow(bdies_tibble)))%>% 
-  gather(key = "celltype", value = "in_cell", GM12878:SX)
-
-bdies_tibble %>% 
-  group_by(bdy_nr) %>% 
-  count("in_cell" == TRUE)
-
+  #Creates Tibble with all Boundaries, their frequency and additional metadata provided
+  bdies <- as_tibble(as.data.frame(grl_bdies)) 
+  bdies_frequency <- dplyr::count(bdies, start, seqnames) 
+  bdies <- bdies %>% 
+    left_join(bdies_frequency, by = c("start", "seqnames")) %>% 
+    left_join(meta_BDY, by = "group_name") %>% 
+    select(Origin, Type, group_name, Name, seqnames, start, end, n)
 
   
-#TODO create a Grangesobject with resized boundaries (start-500kb, end+500kb) to find
-#Genes that overlap with these new ranges
+  #Creates GRangesobject out of all regions that sourround the boundaries in a given 
+  #window. Thereby excludes the boundary coordinates and trims al Ranges that 
+  #are out of bounds.
+  left <- GRanges(seqnames = bdies$seqnames,
+                          IRanges(start = bdies$start - window_BDY,
+                                  end = bdies$start),
+                          seqinfo = hum_seqinfo,
+                          "group_name" = bdies$group_name,
+                          "start_of_realbdy" = bdies$start)
+  left <- trim(left)
+  right <- GRanges(seqnames = bdies$seqnames,
+                           IRanges(start = bdies$end,
+                                   end = bdies$end + window_BDY),
+                           seqinfo = hum_seqinfo,
+                           "group_name" = bdies$group_name,
+                           "start_of_realbdy" = bdies$start)
+  right<- trim(right)
+  all_surrounding_ranges <- c(left, right)
+  
+  #Finds all Genes overlapping the surrounding ranges and retreives their ENSEMBL Gene IDs.
+  #Further retrieves frequency and metadata information from the "bdies" object by using
+  #the original boundary and the original celltype of the queryHits
+  hits_in_window <- as.tibble(as.data.frame(findOverlaps(gr_sourroundingbdies, gr_HumProtGenes)))
+  genes_in_window <- gr_HumProtGenes[hits_in_window$subjectHits] %>% 
+    as.data.frame() %>% 
+    as.tibble() %>% 
+    select(seqnames, gene_id) %>% 
+    mutate(start = all_surrounding_ranges$start_of_realbdy[hits_in_window$queryHits]) %>% 
+    mutate(group_name = all_surrounding_ranges$group_name[hits_in_window$queryHits]) %>% 
+    left_join(bdies, by = c("seqnames", "start", "group_name"))
 
+  #Saves a list of all distinct Gene IDs in the window to the tidydata folder to use as 
+  #background for the GO enrichment analysis
+  all_geneID_in_window <- genes_in_window %>% 
+    select(gene_id) %>% 
+    distinct() %>% 
+    as.matrix()
+  myfile <- file.path("results/tidydata", paste0("AllGeneIDsInWindow_", window_BDY))
+  write(all_geneID_in_window, myfile, sep = "<ENTER>")
+  
+  #Saves a list of genes in a window around a boundary that is uniqe to a celltype. Does
+  #this for all celltypes to use it for the GO-Enrichment analysis
+  celltypes <- genes_in_window %>% 
+    select(group_name) %>% 
+    distinct() %>% 
+    as.data.frame()
+  celltypes <- as.list(celltypes$group_name)
+    
+  for(celltype in celltypes) {
+    myfile <- file.path("results/tidydata", paste0("GeneIDsInUniqueWindow_", celltype, "_", window_BDY))
+    genes_in_window %>% 
+      filter(group_name == celltype) %>% 
+      filter(n == 1) %>% 
+      select(gene_id) %>% 
+      distinct() %>% 
+      as.matrix() %>% 
+      write(myfile, sep = "<ENTER>")
+  }
+  
+  return(bdies)
+}
 
-bdies_tibble %>% 
-  group_by(seqnames) %>% 
-  summarise(n = n()) %>% 
-  ggplot(aes( x = seqnames, y = n)) +
-  geom_bar( stat = "identity") +
-  theme_minimal()+
-  labs(x = " ", y = "Nr of boundaries")
 
 
 
