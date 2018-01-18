@@ -10,6 +10,7 @@ xltoBDY <- function(exfile_sheets, seq_info){
     gr <- GRanges(tb$X__1, 
                 IRanges(tb$X__2, tb$X__3),
                 seqinfo = seq_info)
+    gr <- trim(gr)
     grl <- GRangesList("Celltype" = gr)
     grlist <- c(grlist, grl)
   }
