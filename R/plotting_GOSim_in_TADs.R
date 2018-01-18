@@ -37,8 +37,6 @@ all_gosims <- read_rds("results/tidydata/data_mytibble.rds")
     labs( x = "Distance between Genepairs", y = "BP GO similarity") +
     facet_wrap(~celltype, nrow = 3)
   
- 
- 
     
   #plot MF gosims
 
@@ -79,7 +77,6 @@ all_gosims <- read_rds("results/tidydata/data_mytibble.rds")
     group_by(celltype, real) %>% 
     count(separated)
 
-
   ggplot(data = sept_plot, aes(x = separated , y = n, fill = real)) +
     geom_bar(stat = 'identity', position = "dodge") +
     scale_fill_brewer(palette = "Pastel1") +
@@ -87,7 +84,6 @@ all_gosims <- read_rds("results/tidydata/data_mytibble.rds")
     facet_wrap(~celltype, nrow = 3) +
     labs(x = " ", y = " Nr. of Genepairs ") +
     theme_minimal()
-
 
 
 
