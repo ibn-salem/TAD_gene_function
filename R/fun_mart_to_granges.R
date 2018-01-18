@@ -3,6 +3,7 @@ mart_to_granges <- function(mar, seqinfo){
   #filters the df to exclude all chromosomes without proper names
   mar <- mar %>% 
     filter(chromosome_name %in% paste0(c(as.character(1:22), "X"))) %>% 
+    filter(gene_biotype == "protein_coding") %>% 
     mutate("transcript_size" = transcript_end - transcript_start) %>% 
     arrange(ensembl_gene_id, desc(transcript_size)) %>% 
     distinct(ensembl_gene_id, .keep_all = TRUE) %>% 
@@ -14,8 +15,7 @@ mart_to_granges <- function(mar, seqinfo){
                              end = mar$transcription_start_site),
                      seqinfo = seqinfo,
                      "gene_id" = mar$ensembl_gene_id,
-                     "go_term" = mar$go_id,
-                     "go_linkage_type" = mar$go_linkage_type,
+                     "go_term" = mar$goslim_goa_accession,
                      "NCBI_ID" = paste0("hsa:", mar$entrezgene)
                       )
     

@@ -1,23 +1,13 @@
 
-geneSimScore <- function(...){
-  sim_result <- geneSim(...)
+get_go_sim <- function (cispair, semdata){
   
-  if(is.na(sim_result)){
-    return(NA)
-  }else{
-    return(sim_result$geneSim)
-  }
- 
-}
-
-get_go_sim <- function (g1_id, g2_id, semdata){
+   map2_dbl(cispair$g1_id,
+            cispair$g2_id,
+            geneSim,
+            semData = semdata,
+            measure = "Resnik",
+            combine = "max")
   
-  map2_dbl(g1_id, g2_id,
-    geneSimScore,
-    semData = semdata,
-    measure = "Resnik",
-    combine = "max")
-
 }
 
 

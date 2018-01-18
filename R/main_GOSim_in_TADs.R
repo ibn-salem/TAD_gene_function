@@ -4,7 +4,6 @@ library(biomaRt)
 library(rtracklayer)
 library(genepair)
 library(GOSemSim)
-library(RColorBrewer)
 
 library(org.Hs.eg.db)
 library(BSgenome.Hsapiens.UCSC.hg38)
@@ -29,9 +28,8 @@ source("R/fun_is_separated.R")
 source("R/fun_sample_rdm_bdies.R")
 source("R/fun_get_go_sim.R")
 source("R/fun_tidy_gosimList.R")
-source("R/fun_unique_bdies.R")
 
-#contains information about the human chromosome size etc.
+#contains information about the human chromosome size etc...
 hum_seqinfo <- seqinfo(BSgenome.Hsapiens.UCSC.hg38)
 
 
@@ -61,24 +59,18 @@ hum_seqinfo <- seqinfo(BSgenome.Hsapiens.UCSC.hg38)
   
 #downloads all human genes from ENSEMBL and filters them for protein coding genes. 
 #Keeps only the longest transcript of every GeneID and builds a GRangesobject out of
-#all remaining gene tss
+#all remaining genes
+  
+  #TODO use the "entrezgene" to fetch the KEGG pathways annotated for those genes
   
   ch38_query <- useMart(biomart ="ENSEMBL_MART_ENSEMBL",
                   dataset = "hsapiens_gene_ensembl")
-  
-  ch38_atb <- c("ensembl_gene_id",
-                "chromosome_name",
-                "transcript_end",
-                "transcript_start",
-                "transcription_start_site",
-                "gene_biotype",
-                "goslim_goa_accession",
-                "entrezgene")
-  
+  ch38_atb <- c("ensembl_gene_id", "chromosome_name", "transcript_end", "transcript_start", 
+              "transcription_start_site", "gene_biotype", "goslim_goa_accession", "entrezgene")
   ch38 <- getBM(attributes = ch38_atb, mart = ch38_query)
   gr_ch38 <- mart_to_granges(ch38, hum_seqinfo)
   
-  #write_rds(gr_ch38, "results/tidydata/data_granges_AllFilteredGenes.rds")
+  #write_rds(gr_ch38, "Datasets/data_granges_AllFilteredGenes.rds")
   gr_ch38 <- read_rds("results/tidydata/data_granges_AllFilteredGenes")
 
   
@@ -89,10 +81,10 @@ hum_seqinfo <- seqinfo(BSgenome.Hsapiens.UCSC.hg38)
   cisp <- cisp %>% 
     as_tibble() %>% 
     mutate("g1_id" = gr_ch38$gene_id[cisp$g1]) %>%
-    mutate("g2_id" = gr_ch38$gene_id[cisp$g2]) 
+    mutate("g2_id" = gr_ch38$gene_id[cisp$g2]) %>%
 
   
-#construction of data classes to compare semantic similarities among GO Terms
+#construction of a data classes to compare semantic similarities among GO Terms
 #via ensembl geneIDs and comparison of GO annotations for all annotated genepairs
 
   #constructs the data classes of all three GO annotations
@@ -104,12 +96,19 @@ hum_seqinfo <- seqinfo(BSgenome.Hsapiens.UCSC.hg38)
   #WARNING: Takes forever(~ 12h) could not find a way to speed it up so far. 
   #In addition, the readout type is not uniform (list of lists with different lengths)
   cisp <- cisp %>% 
-    mutate(go_sim_BP = get_go_sim(g1_id, g2_id, hsGO_BP)) %>% 
-    mutate(go_sim_MF = get_go_sim(g1_id, g2_id, hsGO_MF)) %>% 
-    mutate(go_sim_CC = get_go_sim(g1_id, g2_id, hsGO_CC))
+    mutate(go_sim_BP = get_go_sim(cisp, hsGO_BP)) %>% 
+    mutate(go_sim_MF = get_go_sim(cisp, hsGO_MF)) %>% 
+    mutate(go_sim_CC = get_go_sim(cisp, hsGO_CC))
   
-  write_rds(cisp, "results/tidydata/cisp_with_allgosim.rds")
-  # cisp <- read_rds("results/tidydata/cisp_with_allgosim.rds")
+  #write_rds(cisp, "results/tidydata/cisp_with_allgosim.rds")
+  cisp <- read_rds("results/tidydata/cisp_with_allgosim.rds")
+  
+  #extracts only the geneSim value of each list of lists
+  cisp <- cisp %>% 
+    mutate(go_sim_BP = tidy_gosimList(go_sim_BP)) %>% 
+    mutate(go_sim_MF = tidy_gosimList(go_sim_MF)) %>% 
+    mutate(go_sim_CC = tidy_gosimList(go_sim_CC))
+  
   
 #checks for all celltypes, genepairs and random or real bdies wether two genes 
 #are separated by a boundary or not and stores all in one tibble
@@ -125,6 +124,9 @@ hum_seqinfo <- seqinfo(BSgenome.Hsapiens.UCSC.hg38)
 
   #write_rds(mytibble, "results/tidydata/data_mytibble.rds")
   mytibble <- read_rds("results/tidydata/data_mytibble.rds")
+  
+
+  
   
   
 #creating GRangesList object of TADs from Dixon and Schmitt Datasets, count the Genes
@@ -175,35 +177,22 @@ hum_seqinfo <- seqinfo(BSgenome.Hsapiens.UCSC.hg38)
   write_rds(gpert, "results/tidydata/data_all_tad_annotations.rds")
 
 
-#loads metadata corresponding to the schmitt Boundaries. 
-meta_schmitt_BDY<-read_xlsx("data/ctypes_metadata.xlsx") 
 
-#Counts the Frequency of each boundary across all celltypes annotated in schmitt_BDY.
-#Further retrieves all geneIDs of the genes that map into a defined window surround these
-#boundaries an saves them in a file within the results/tidydata folder. Another
-#file that simply contains all Genes around unique boundaries without caring about the
-#celltype. Thes stored GeneID lists can be used to run a Gene Ontology enrichment (for
-#example with the Webtool GOrilla)
-all_bdies_freq <- find_genes_surround_unique_bdies(schmitt_BDY,
-                                                   gr_ch38,
-                                                   meta_schmitt_BDY,
-                                                   20000,
-                                                   hum_seqinfo)
-write_rds(all_bdies_freq, "results/tidydata/AllBdiesWithFrequency.rds")
+
 
 #creating a heatmap of the jaccard coefficients of each entry pair 
 #for the coordinates of a GRList object
-  jmat <- jaccard_matrix(schmitt_BDY)
-  my_palette <- colorRampPalette(c("grey", "red", "blue"))(n = 100)
-  heatmap.2(jmat, tracecol = NA, symm = TRUE, col = my_palette)
+jmat <- jaccard_matrix(schmitt_BDY)
+my_palette <- colorRampPalette(c("grey", "red", "blue"))(n = 100)
+heatmap.2(jmat, tracecol = NA, symm = TRUE, col = my_palette)
 
 #converts the jaccard_matrix into a distance matrix and does pcomp
-  distmatrix <- vegdist(jmat, method ="bray", diag =TRUE)
-  pcomp <- pco(distmatrix, k = 2)
-  plot(pcomp$points, cex = 2, pch = 16 , col="blue")
-  jmat <- as.data.frame(jmat)
-  for(i in 1:length(names(jmat))){
-    x <- pcomp$points[i,1]
-    y <- pcomp$points[i,2]
-    text(x,y, labels = names(jmat)[i], pos = 1)
-  }
+distmatrix <- vegdist(jmat, method ="bray", diag =TRUE)
+pcomp <- pco(distmatrix, k = 2)
+plot(pcomp$points, cex = 2, pch = 16 , col="blue")
+jmat <- as.data.frame(jmat)
+for(i in 1:length(names(jmat))){
+  x <- pcomp$points[i,1]
+  y <- pcomp$points[i,2]
+  text(x,y, labels = names(jmat)[i], pos = 1)
+}
