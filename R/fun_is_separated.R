@@ -1,5 +1,5 @@
 is_separated <- function(cispairs, genes_granges, grangeslist, seqinfo){
-  
+
   #extracts the names of variables stored in cispairs and in the grangeslist 
   #object(celltypes in thsi case) and concatenates them
   nams <- names(cispairs)
@@ -24,11 +24,11 @@ is_separated <- function(cispairs, genes_granges, grangeslist, seqinfo){
   #renames the colums of the tibble created above
   names(cispairs) <- nams
   
-  #transforms teh tibble to have all celltypes as a variable and therefore stored
+  #transforms the tibble to have all celltypes as a variable and therefore stored
   #in one column
   tidyDF <- cispairs %>% 
     as_tibble() %>%
-    gather(key = "celltype", value = "separated", GM12878:hESC)
+    gather(key = "celltype", value = "separated", H1:IMR90_Dixon)
   
   return(tidyDF)
 }
