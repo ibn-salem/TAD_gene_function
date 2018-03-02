@@ -3,7 +3,7 @@
 xltoBDY <- function(exfile_sheets, seq_info){
   
   grlist <- GRangesList()
-  sheet_names <- excel_sheets(exfile_sheets)
+  sheet_names <- c("H1", "IMR90", "GM12878")
   
   for (entry in sheet_names){
     tb <- as_tibble(read_xlsx(exfile_sheets, sheet = entry, col_names = FALSE))
