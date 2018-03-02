@@ -1,139 +1,317 @@
 library(tidyverse)
+library(ggsignif)
+library(ggpubr)
+library(RColorBrewer)
+library(readxl)
 
-all_gosims <- read_rds("results/tidydata/data_mytibble.rds")
+source("R/fun_plot_binned_gosim.R")
+source("R/fun_plot_gosim.R")
+source("R/fun_plot_gosim_distance.R")
 
-  #plot of BP gosims
+#load tibble with gene pairs and their go annotations
+all_gosims <- read_rds("results/tidydata/AllGpairsWoParal.rds")
+metadata <- read_xlsx("data/ctypes_metadata.xlsx")
+names(metadata)[1] <- "celltype"
 
-  BP_gosims <- all_gosims %>% 
-    filter(go_sim_BP != "NA")
-  
-  #plots GOsim of all real boundaries into a geom_smooth plot to show correlation between
-  #distance within genepairs and their similarity
-  all_gosims %>% 
-    filter(go_sim_BP != 'NA') %>%
-    filter(real == TRUE) %>% 
-    ggplot(aes(x = dist, y = go_sim_BP)) + 
-      geom_smooth(aes(color = separated)) +
-      theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-      labs( x = "Distance between Genepairs", y = "BP GO similarity") +
-      facet_wrap(~celltype, nrow = 3)
-    
-  #plots BP GOsim distribution of real boundaries into boxplots
-  all_gosims %>% 
-    filter(go_sim_BP != 'NA') %>% 
-    filter(real == TRUE) %>% 
-    ggplot(aes(x = separated, y = go_sim_BP, fill = separated)) +
-      geom_boxplot(outlier.shape = NA) +
-      ylim(0, 0.75) +
-      labs( x = "Separated by Boundary", y = "BP GO similarity") +
-      facet_wrap(~celltype, nrow = 3) +
-      theme_bw()
+all_gosims <- all_gosims %>% 
+  mutate(sep  = ifelse( separated == TRUE, "different TAD", "same TAD")) %>% 
+  mutate(random = ifelse(real == TRUE, "Hi-C", "randomised")) %>% 
+  select(celltype, "real" = random, "separated" = sep, go_sim_BP, go_sim_MF, go_sim_CC, dist, same_kegg_pathway) 
 
-  all_gosims %>% 
-    filter(go_sim_BP != 'NA') %>% 
-    ggplot(aes(x = dist, y = go_sim_BP)) + 
-    geom_smooth(aes(color = separated, linetype = real)) +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-    labs( x = "Distance between Genepairs", y = "BP GO similarity") +
-    facet_wrap(~celltype, nrow = 3)
-  
-    
-  #plot MF gosims
 
-  MF_gosims <- all_gosims %>% 
-    filter(go_sim_MF != "NA")
-  
-  ggplot(data = MF_gosims, aes(x = dist, y = go_sim_MF)) + 
-    geom_smooth(aes(color = separated, linetype = real)) +
-    facet_wrap(~celltype, nrow = 3)
-  
-  ggplot(data = MF_gosims, aes(x = separated, y = go_sim_MF, fill = separated)) +
-    geom_boxplot(outlier.shape = NA) +
-    ylim(0, 0.75) +
-    facet_wrap(~celltype, nrow = 3) +
-    theme_bw()
-  
-  #plot cc gosims
-  
-  ggplot(all_gosims, aes(x = separated, y = go_sim_CC, fill = real)) +
-    geom_boxplot(outlier.shape = NA) +
-    facet_wrap(~celltype, nrow = 3)
-  
-  CC_gosims <- all_gosims %>% 
-    filter(go_sim_CC != "NA")
-  
-  ggplot(data = CC_gosims, aes(x = dist, y = go_sim_CC)) + 
-    geom_smooth(aes(color = separated, linetype = real)) +
-    facet_wrap(~celltype, nrow = 3)
+#adds a binning variable to genepairs according to their distance to each other
+all_gosims <- all_gosims %>% 
+  left_join(metadata, by = "celltype") %>% 
+  filter(go_sim_BP != 'NA') %>% 
+  mutate(bin = cut_interval(dist, n = 4)) %>% 
+  mutate(bin = ifelse(bin == "[0,2.5e+05]",
+                       "0 - 250kb", 
+                       ifelse(bin == "(2.5e+05,5e+05]",
+                              "250kb - 500kb",
+                              ifelse(bin == "(5e+05,7.5e+05]",
+                                     "500kb - 750kb",
+                                     "750kb - 1000kb")
+                              )
+                       )
+         ) 
+#adds a grouping variable for the combinations of real and separated
+all_gosims <- all_gosims %>% 
+  mutate(xfactor = ifelse(real == "Hi-C", 
+                           ifelse(separated == "same TAD",
+                                  "Hi-C & same TAD",
+                                  "Hi-C & different TAD" ),
+                           ifelse(separated == "same TAD",
+                                  "randomised & same TAD",
+                                  "randomised & different TAD")
+                           )
+  )
 
-  ggplot(data = CC_gosims, aes(x = separated, y = go_sim_CC, fill = separated)) +
-    geom_boxplot(outlier.shape = NA) +
-    ylim(0, 0.75) +
-    facet_wrap(~celltype, nrow = 3) +
-    theme_bw()
+
+all_gosims %>%
+  group_by(separated, same_kegg_pathway) %>% 
+  summarise(n = n())
+
+
+gosim <- all_gosims %>%
+  ggplot(aes(x = xfactor , y = go_sim_BP)) +
+  facet_grid(.~Name+Dataset) +
+  geom_boxplot(aes(fill = separated, color = real),
+               outlier.shape = NA,
+               width = 0.5,
+               lwd = 1) +
+  geom_signif(comparisons = list(c("Hi-C & same TAD", "Hi-C & different TAD")),
+              y_position = 0.75,
+              tip_length = 0.02,
+              textsize = 4,
+              vjust = -0.2) +
+  geom_signif(comparisons = list(c("randomised & same TAD", "randomised & different TAD")),
+              y_position = 0.75,
+              tip_length = 0.02,
+              textsize = 4,
+              vjust = -0.2) +
+  geom_signif(comparisons = list(c("Hi-C & same TAD", "randomised & same TAD")),
+              y_position = 0.875,
+              tip_length = 0.02,
+              textsize = 4,
+              vjust = -0.2) +
+  scale_fill_manual(values = c("grey95", "red4")) +
+  scale_color_manual(values = c("navyblue", "snow4")) +
+  labs(y = "BP GO similarity scores") +
+  theme_bw() +
+  theme(axis.title.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.title.y = element_text(size = 15),
+        axis.text.y = element_text(size =15, color = "black"),
+        axis.ticks.y = element_line(size = 1),
+        strip.text = element_text(size = 15),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 15),
+        legend.position = "bottom")
+
+gosim
+
+ggsave(filename = "GosimEscForPoster.pdf",
+       path = "results/figures",
+       device = c("pdf"),
+       units = c("cm"),
+       height = 10,
+       width = 20)
+
+gosim_dist <- all_gosims %>% 
+  ggplot(aes(x = dist, y = go_sim_BP, color = separated)) +
+  geom_smooth(lwd = 2) +    
+  scale_color_manual(values = c("grey60", "red4")) +
+  facet_grid(Name+Dataset~real) +
+  labs(x = "Genomic Distance (bp)",
+       y = "BP GO similarity scores") +
+  theme_bw() +
+  theme(axis.ticks = element_line(size = 1),
+        axis.text.x = element_text(size = 20, angle = 45, hjust = 1, color = "black"),
+        axis.title = element_text(size = 21, color = "black"),
+        axis.text.y = element_text(size = 20, color = "black"),
+        strip.text = element_text(size = 20, color = "black"),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 20, color = "black"),
+        legend.position = "bottom")
+
+gosim_dist
+
+ggsave(filename = "GosimDistanceEscForPoster.pdf",
+       path = "results/figures",
+       device = c("pdf"),
+       units = c("cm"),
+       height = 12,
+       width = 20)
+
+binned_gosim <- all_gosims %>% 
+  ggplot(aes(x = xfactor, y = go_sim_BP)) +
+  geom_boxplot(aes(fill = separated, color = real),
+               outlier.shape = NA,
+               width = 0.5,
+               lwd = 1) +
+  geom_signif(comparisons = list(c("Hi-C & same TAD", "Hi-C & different TAD")),
+              y_position = 0.75,
+              tip_length = 0.02,
+              textsize = 5,
+              vjust = -0.2) +
+  geom_signif(comparisons = list(c("randomised & same TAD", "randomised & different TAD")),
+              y_position = 0.75,
+              tip_length = 0.02,
+              textsize = 5,
+              vjust = -0.2) +
+  geom_signif(comparisons = list(c("Hi-C & same TAD", "randomised & same TAD")),
+              y_position = 0.875,
+              tip_length = 0.02,
+              textsize = 5,
+              vjust = -0.2) +
+  scale_fill_manual(values = c("grey95", "red4")) +
+  scale_color_manual(values = c("navyblue", "snow4")) +
+  facet_grid(bin ~ Name+Dataset) +
+  labs(y = "BP GO similarity scores") +
+  theme_bw() +
+  theme(axis.title.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.title.y = element_text(size = 22),
+        axis.text.y = element_text(size =20, color = "black"),
+        axis.ticks.y = element_line(size = 2),
+        strip.text = element_text(size = 20),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 20),
+        legend.position = "bottom") 
+
+binned_gosim
+ggsave(filename = "GosimBinnedEscForPoster.pdf",
+       path = "results/figures",
+       device = c("pdf"),
+       units = c("cm"),
+       height = 36,
+       width = 22)
+
+
+
+
+#bins and go sim scores plotted for all celltypes
+
+part_cts <- c("hESC", "H1", "IMR90", "GM12878", "SX")
+names(part_cts) <- "Example"
+plot_gosim(part_cts, all_gosims, 600, 250)
+dev.off()
+plot_binned_gosim(part_cts, all_gosims, 620, 600)
+dev.off()
+plot_gosim_distance(part_cts, all_gosims, 400,680)
+dev.off()
+
+
+all_celltypes <- unique(all_gosims$celltype)
+
+first_cts <- all_celltypes[1:8]
+names(first_cts) <- "1-8"
+plot_gosim(first_cts, all_gosims, 920, 250)
+dev.off()
+plot_binned_gosim(first_cts, all_gosims, 990, 600)
+dev.off()
+plot_gosim_distance(first_cts, all_gosims, 400, 980)
+dev.off()
+
+middle_cts <- all_celltypes[9:16]
+names(middle_cts)<- "9-16"
+plot_gosim(middle_cts, all_gosims, 920, 250)
+dev.off()
+plot_binned_gosim(middle_cts, all_gosims, 990, 600)
+dev.off()
+plot_gosim_distance(middle_cts, all_gosims, 400, 980)
+dev.off()
+
+last_cts <- as.list(all_celltypes[17:22])
+names(last_cts) <-"17-22"
+plot_gosim(last_cts, all_gosims, 920, 250)
+dev.off()
+plot_binned_gosim(last_cts, all_gosims, 740, 600)
+dev.off()
+plot_gosim_distance(last_cts, all_gosims, 400, 980)
+dev.off()
+
+  
+
+
+
   
 #plots the number of Genes separated and not separated by a boundary into a facet grid
-  sept_plot <- tidydf %>% 
-    group_by(celltype, real) %>% 
-    count(separated)
+sept_plot <- all_gosims %>% 
+  filter(real == "Hi-C") %>% 
+  group_by(Name, celltype) %>% 
+  count(separated)
 
-  ggplot(data = sept_plot, aes(x = separated , y = n, fill = real)) +
-    geom_bar(stat = 'identity', position = "dodge") +
-    scale_fill_brewer(palette = "Pastel1") +
-    geom_text(aes(label = n), vjust = 1, size = 1.9, position = position_dodge(width = 0.9)) +
-    facet_wrap(~celltype, nrow = 3) +
-    labs(x = " ", y = " Nr. of Genepairs ") +
-    theme_minimal()
+ggplot(data = sept_plot, aes(x = Name, y = n, fill = separated)) +
+  geom_bar(stat = 'identity', position = "dodge") +
+  scale_fill_manual(values =c("red4", "grey60")) +
+  labs(x = " ", y = " Nr. of Genepairs ") +
+  theme_bw() + 
+  theme(legend.title = element_blank(),
+        legend.position = "top",
+        legend.text = element_text(size = 28),
+        axis.ticks = element_line(size = 2),
+        axis.text.x = element_text(size = 28, angle = 45, hjust = 1, color = "black"),
+        axis.text.y = element_text(size = 28, color = "black"),
+        axis.title = element_text(size = 30))
 
+ggsave(filename = "NrOfGenepairsInCtypes.pdf",
+       path = "results/figures",
+       device = c("pdf"),
+       units = c("cm") ,
+       width = 35,
+       height = 18)
 
 
 #loads the dataframe containing annotations about the nr of genes in each tad
-all_tad_annotations <- read_rds("results/tidydata/data_all_tad_annotations.rds")
+all_tad_annotations <- read_rds("results/tidydata/AllTadWithGenes.rds")
 
-  #plots the frequency in which several numbers of genes per tad occur
-  genes_per_tad_plot <- all_tad_annotations %>% 
-    group_by(celltype, n_genes) %>% 
-    summarize(n = n()) %>% 
-    filter(n_genes <=100)
-  
-  #density distribution of Genefrequency in each TAD and per Celltype
-  pdf(file = "results/figures/Genes_per_TAD_densitydist.pdf", width = 12, height = 8)
-  ggplot(genes_per_tad_plot, aes(x = n_genes, fill = "gray")) +
-    scale_fill_manual(values = "gray") +
-    geom_density() +
-    facet_wrap(~celltype, nrow = 3) +
-    theme_minimal()+
-    theme(legend.position = "none") +
-    labs(x = "Nr of Genes per TAD", y = "Density")
-  dev.off()
+all_tad_annotations %>% 
+  filter(celltype %in% c("hESC", "H1")) %>% 
+  mutate(celltype = ifelse(celltype == "hESC","Embryonic Stem Cell (2012)","Embryonic Stem Cell (2016")) %>% 
+  group_by(n_genes) %>% 
+  ggplot(aes (x = n_genes, fill = celltype)) +
+  geom_histogram(bins = 50) + 
+  scale_fill_manual(values = c("red4", "orange2" )) +
+  labs(y = "Frequency", x = "Nr of Genes in a TAD") +
+  xlim(0,50) +
+  facet_grid(.~celltype) +
+  theme_bw() +
+  theme(legend.position = "none",
+        strip.text.x = element_text(size = 38),
+        axis.title = element_text(size = 38),
+        axis.text = element_text(size = 38, color = "black"))
 
-  #histogram that shows distribuiton of Genefrequency in each TAD and per Celltype
-  pdf(file = "results/figures/Genes_per_TAD_histogramdist.pdf", width = 12, height = 8)
-  ggplot(genes_per_tad_plot, aes(x = n_genes, y = n, fill = n)) +
-    geom_bar(stat = "identity", position = "dodge") + 
-    facet_wrap(~celltype, nrow = 3) +
-    theme_bw() +
-    labs(x = "Nr of Genes per TAD", y = "Frequency of Occurence")
-  dev.off()
+ggsave(filename = "GenesPerTadDistribution.pdf",
+       path = "results/figures",
+       device = c("pdf"),
+       units = c("cm") ,
+       width = 44,
+       height = 20)
 
-  #boxplots to show distribution of TAD sizes per Celltype
-  pdf(file = "results/figures/TADsize_distribution_per_celltype.pdf", width = 12, height = 8)
-  ggplot(all_tad_annotations, aes(x = celltype, y = TAD_size)) +
-    geom_boxplot(outlier.shape = NA) +
-    theme_minimal() +
-    labs(x = "Celltype", y = "TAD sizes") +
-    ylim(0,3500000)
-  dev.off()
-  
-  
-  pdf(file = "results/figures/NrOfTADs_per_Celltype.pdf", width = 12, height = 8)
-  all_tad_annotations %>% 
-    group_by(celltype) %>% 
-    summarise(n = n()) %>% 
-    ggplot( aes(x = celltype, y = n, fill = n)) +
-      geom_bar(stat= "identity") +
-      theme_bw()
-  dev.off()
+x <- all_gosims %>% 
+  select(celltype, Name) %>% 
+  unique()
+
+all_tad_annotations %>% 
+  left_join(x, by = c("celltype")) %>% 
+  group_by(Name) %>% 
+  ggplot(aes(x = Name, fill = TAD_nr)) +
+  geom_bar() +
+  scale_fill_gradient(low = "grey60" , high = "firebrick4") +
+  theme_bw() +
+  labs(x = "", y = "", fill = "Nr. of TADs") + 
+  theme(axis.text.x = element_text(size = 27, angle = 45, hjust = 1, color = "black"),
+        axis.text.y = element_text(size =27, color = "black"),
+        axis.ticks = element_line(size = 2),
+        legend.position=  "none")
+
+ggsave(filename = "TADsPerCtype.pdf",
+       path = "results/figures",
+       device = c("pdf"),
+       units = c("cm") ,
+       width = 46,
+       height = 23)
   
 
+x <- all_tad_annotations %>% 
+  group_by(celltype) %>% 
+  mutate(nr_genes_in_TAD = sum(n_genes)) %>% 
+  mutate(mean_TAD_size = mean(TAD_size))
+
+x <- x %>% 
+  select_("celltype", "TAD_nr","mean_TAD_size", "nr_of_all_Genes", "nr_genes_in_TAD", "Nr_of_Pairs", "meanrange_of_pairs")
+
+xnames <- c("Celltype", "Nr_TAD","mean_size_TAD", "All_Genes", "Genes_in_TAD", "Nr_Pairs", "meanrange_Pairs")
+names(x) <- xnames
+x <- x %>% 
+  mutate(mean_size_TAD = as.integer(mean_size_TAD)) %>% 
+  mutate(meanrange_Pairs = as.integer(meanrange_Pairs))
+
+
+x <- unique(x)
+
+write_tsv(x, "results/tidydata/meta_for_report")
 
