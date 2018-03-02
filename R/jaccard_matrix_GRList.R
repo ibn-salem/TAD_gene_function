@@ -11,10 +11,9 @@ jaccard_matrix <- function(grlist){
   for (x in z){
     for(y in z){
       #find overlaps between elements of GRangesList
-      overlaps <- findOverlaps(grlist[[x]], grlist[[y]])
+      overlaps <- findOverlaps(grlist[[x]], grlist[[y]], minoverlap = 40001)
       
       #calculate the jaccard coefficient to quantify similarity of boundaries
-
       c <- length(overlaps)
       a_uniq <- sum(!overlapsAny(grlist[[x]], grlist[[y]]))
       b_uniq <- sum(!overlapsAny(grlist[[y]], grlist[[x]]))
