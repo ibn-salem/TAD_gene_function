@@ -31,7 +31,7 @@ find_genes_surround_unique_bdies <- function(grl_bdies, gr_HumProtGenes, meta_BD
   #Finds all Genes overlapping the surrounding ranges and retreives their ENSEMBL Gene IDs.
   #Further retrieves frequency and metadata information from the "bdies" object by using
   #the original boundary and the original celltype of the queryHits
-  hits_in_window <- as.tibble(as.data.frame(findOverlaps(gr_sourroundingbdies, gr_HumProtGenes)))
+  hits_in_window <- as.tibble(as.data.frame(findOverlaps(all_surrounding_ranges, gr_HumProtGenes)))
   genes_in_window <- gr_HumProtGenes[hits_in_window$subjectHits] %>% 
     as.data.frame() %>% 
     as.tibble() %>% 
