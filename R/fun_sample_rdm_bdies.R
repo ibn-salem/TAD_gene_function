@@ -3,6 +3,7 @@ sample_rdm_bdies <- function(real_bdies_gr, bdysize, hum_seqinfo){
   
   #counts number of boundaries per chromosome
   bdy_per_chr <- real_bdies_gr %>% 
+    as.data.frame() %>% 
     as_tibble() %>% 
     group_by(seqnames) %>% 
     summarise(n = n()) %>%
@@ -20,6 +21,8 @@ sample_rdm_bdies <- function(real_bdies_gr, bdysize, hum_seqinfo){
   rdm_bdies_gr <- GRanges(seqnames,
                      IRanges(unlist(starts), width = bdysize),
                      seqinfo = hum_seqinfo)
+  
+  rdm_bdies_gr <- trim(rdm_bdies_gr)
   
   return(rdm_bdies_gr)
 }
