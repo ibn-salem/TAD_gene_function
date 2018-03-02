@@ -13,10 +13,7 @@ mart_to_granges <- function(mar, seqinfo){
                      IRanges(start = mar$transcription_start_site,
                              end = mar$transcription_start_site),
                      seqinfo = seqinfo,
-                     "gene_id" = mar$ensembl_gene_id,
-                     "go_term" = mar$go_id,
-                     "go_linkage_type" = mar$go_linkage_type,
-                     "NCBI_ID" = paste0("hsa:", mar$entrezgene)
+                     "gene_id" = mar$ensembl_gene_id
                       )
     
   return(granges)
