@@ -62,12 +62,6 @@ all_BDY <- c(schmitt_BDY, imr90_Rao_BDY, gm12878_Rao_BDY, hESC_BDY, imr90_Dixon_
 remove(schmitt_BDY, imr90_Rao_BDY, gm12878_Rao_BDY, hESC_BDY, imr90_Dixon_BDY)
 
 
-#creates a GRangesList with randomly introduced boundaries for every celltype in the List
-all_rdm_BDY <- lapply(all_BDY, sample_rdm_bdies, 40000, hum_seqinfo)
-all_rdm_BDY <- GRangesList(rdm_BDY)
-
-
-  
 #downloads all human genes from ENSEMBL and filters them for protein coding genes. 
 #Keeps only the longest transcript of every GeneID and builds a GRangesobject out of
 #all remaining gene tss
@@ -132,9 +126,8 @@ cisp <- cisp %>%
   filter(missing_values == "not_missing") %>% 
   select(variables)
 
-#downloads paralog and kegg information of all human genes from ensembl, filters the cisp tibble for
-#all non paralog pairs and returns them, determines whether or not genepairs are connected via the 
-#same KEGG pathway
+#downloads paralog and kegg information of all human genes from ensembl and returns them.
+#Additionally determines whether or not genepairs are connected via the same KEGG pathway
 cisp <- filter_paralogs(cisp, ch38_Mart) 
 cisp <- compare_kegg_pathways(cisp, ch38_Mart)
 
@@ -146,24 +139,14 @@ cisp <- read_rds("results/tidydata/CispWoParalogsAndWithKegg.rds")
 #are separated by a boundary or not and stores all in one tibble
 gene_sep_allbdy <- is_separated(cisp, gr_ch38, all_BDY, hum_seqinfo)
 gene_sep_allbdy <- gene_sep_allbdy %>% 
-  mutate(real = TRUE)
+  mutate(real = TRUE,
+         replicate = 0
+         ) 
 
-gene_sep_allrdmbdy <- tibble()
-for (number in 1:100) {
-
-  rdm_BDY <- lapply(all_BDY, sample_rdm_bdies, 40000, hum_seqinfo)
-  rdm_BDY <- GRangesList(rdm_BDY)
-  
-  gene_sep_rdmbdy <- is_separated(cisp, gr_ch38, rdm_BDY, hum_seqinfo)
-  gene_sep_rdmbdy <- gene_sep_rdmbdy %>% 
-    mutate(real = FALSE) %>% 
-    mutate(replicate = number)
-  
-  gene_sep_allrdmbdy <- rbind(gene_sep_allrdmbdy, gene_sep_rdmbdy)
-}
+write_rds(gene_sep_allbdy, "results/tidydata/testdata.rds")
 
 
-sample_rand_boundaries <- function(number){
+sample_rand_boundaries_multiple <- function(number){
   
   rdm_BDY <- lapply(all_BDY, sample_rdm_bdies, 40000, hum_seqinfo)
   rdm_BDY <- GRangesList(rdm_BDY)
@@ -178,7 +161,7 @@ sample_rand_boundaries <- function(number){
 }
 
 n_rand <- 10
-randomList <- map(1:n_rand, sample_rand_boundaries)
+randomList <- map(1:n_rand, sample_rand_boundaries_multiple)
 
 large_separated <- unlist(randomList)
 
@@ -186,30 +169,43 @@ largeDF <- cisp[rep(1:nrow(cisp), length(large_separated) / nrow(cisp)), ]
 
 largeDF <- largeDF %>%   
   mutate(
+    celltype = "randomised",
     separated = large_separated,
     real = FALSE,
     replicate = rep(1:n_rand, each = n()/n_rand )
     )
 
-df <- df_mit_allen_scores_und_gruppen
+largeDF <- rbind(largeDF, gene_sep_allbdy)
 
-medianDF <- df %>% 
-  group(real, separated, replicate) %>% 
-  summarize(
-    n = n(),
-    median = median(GO_sim_BP)
-  ) %>% 
-  group_by(real, separated) %>% 
-  summarize(
-    n = n(),
-    mean_score = mean(meidan),
-    sd_score = sd(meidan)
-  )
+go_sim_type <- c("BP", "CC", "MF")
+medianDF <- c()
 
-p <- ggplot(df, aes(x = separted, y = mean_score)) + 
-  facet_grid(.~real) +
+for (entry in go_sim_type) {
+  medDF <- largeDF %>% 
+    group_by(celltype, real, separated, replicate) %>% 
+    summarize(n = n(),
+              median = median(go_sim_BP, na.rm = TRUE)
+              ) %>% 
+    group_by(celltype, real, separated) %>% 
+    summarize(
+      n = n(),
+      mean_score = mean(median),
+      sd_score = sd(median)
+    ) %>% 
+    mutate(GO_type = entry)
+  medianDF <- rbind(medianDF, medDF)
+  remove(medDF)
+}
+
+p <- medianDF %>% 
+  filter(real == FALSE) %>% 
+  ggplot( aes(x = separated, y = mean_score, fill = separated)) + 
+  facet_grid(.~GO_type) +
   geom_bar(stat = "identity") + 
-  geom_errorbar(aes(ymin = mean_score - sd_score, ymax = mean_score + sd_score))
+  geom_errorbar(aes(ymin = mean_score - sd_score, ymax = mean_score + sd_score)) +
+  scale_fill_manual(values = c("darkkhaki", "plum"))+
+  theme_bw()
+p
 
   
 mytibble <- rbind(gene_sep_allbdy, gene_sep_allrdmbdy)

@@ -13,9 +13,11 @@ filter_paralogs <- function(cispairs, bio_mart) {
   
   #classifies gene pairs whether or not they are paralogs and removes those that are
   cispairs <- cispairs %>% 
-    left_join(paralogs, by = c("g1_id", "g2_id")) %>% 
+    left_join(paralogs, by = c("g1_id", "g2_id")) 
+
+'%>% 
     filter(is.na(paralog)) %>% 
-    select(g1, g2, dist, g1_id, g2_id, go_sim_BP, go_sim_MF, go_sim_CC)
+    select(g1, g2, dist, g1_id, g2_id, go_sim_BP, go_sim_MF, go_sim_CC)'
   
   return(cispairs)
 } 

@@ -9,14 +9,14 @@ source("R/fun_plot_gosim.R")
 source("R/fun_plot_gosim_distance.R")
 
 #load tibble with gene pairs and their go annotations
-all_gosims <- read_rds("results/tidydata/AllGpairsWoParal.rds")
+all_gosims <- read_rds("results/tidydata/testdata.rds")
 metadata <- read_xlsx("data/ctypes_metadata.xlsx")
 names(metadata)[1] <- "celltype"
 
 all_gosims <- all_gosims %>% 
   mutate(sep  = ifelse( separated == TRUE, "different TAD", "same TAD")) %>% 
   mutate(random = ifelse(real == TRUE, "Hi-C", "randomised")) %>% 
-  select(celltype, "real" = random, "separated" = sep, go_sim_BP, go_sim_MF, go_sim_CC, dist, same_kegg_pathway) 
+  select(celltype, "real" = random, "separated" = sep, go_sim_BP, go_sim_MF, go_sim_CC, dist, same_kegg_pathway, paralog) 
 
 
 #adds a binning variable to genepairs according to their distance to each other
@@ -46,13 +46,8 @@ all_gosims <- all_gosims %>%
                            )
   )
 
-
-all_gosims %>%
-  group_by(separated, same_kegg_pathway) %>% 
-  summarise(n = n())
-
-
 gosim <- all_gosims %>%
+  filter(paralog != is.na(paralog)) %>% 
   ggplot(aes(x = xfactor , y = go_sim_BP)) +
   facet_grid(.~Name+Dataset) +
   geom_boxplot(aes(fill = separated, color = real),
@@ -88,7 +83,6 @@ gosim <- all_gosims %>%
         legend.title = element_blank(),
         legend.text = element_text(size = 15),
         legend.position = "bottom")
-
 gosim
 
 ggsave(filename = "GosimEscForPoster.pdf",
